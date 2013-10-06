@@ -1268,7 +1268,7 @@ void fail(void);
 void fail_msg(const char *msg, ...);
 #else
 #define fail_msg(msg, ...) do { \
-    print_error("ERROR: " msg "\n", ##__VA_ARGS__); \
+    print_error("%s:%u: error: " msg "\n", __FILE__, __LINE__,##__VA_ARGS__); \
     fail(); \
 } while (0)
 #endif
@@ -1559,7 +1559,8 @@ void expect_assert_failure(function fn_call);
     } else { \
       function_call ; \
       global_expecting_assert = 0; \
-      print_error("Expected assert in %s\n", #function_call); \
+      print_error("%s:%u: error: Expected assert in %s\n", \
+                  __FILE__, __LINE__#function_call); \
       _fail(__FILE__, __LINE__); \
     } \
   }
