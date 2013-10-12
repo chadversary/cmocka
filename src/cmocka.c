@@ -121,6 +121,11 @@ typedef struct MallocBlockInfo {
     ListNode node;            /* Node within list of all allocated blocks. */
 } MallocBlockInfo;
 
+typedef enum TestResult {
+    TEST_PASS,
+    TEST_FAIL,
+} TestResult;
+
 /* State of each test. */
 typedef struct TestState {
     const ListNode *check_point; /* Check point of the test if there's a */
