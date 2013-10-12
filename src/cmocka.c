@@ -1648,7 +1648,7 @@ void print_error(const char* const format, ...) {
 }
 
 
-int _run_test(
+TestResult _run_test(
         const char * const function_name,  const UnitTestFunction Function,
         void ** const volatile state, const UnitTestFunctionType function_type,
         const void* const heap_check_point) {
@@ -1656,7 +1656,7 @@ int _run_test(
         (heap_check_point ?
          heap_check_point : check_point_allocated_blocks());
     void *current_state = NULL;
-    volatile int rc = 1;
+    volatile TestResult test_result = TEST_FAIL;
     int handle_exceptions = 1;
 #ifdef _WIN32
     handle_exceptions = !IsDebuggerPresent();
@@ -1683,7 +1683,8 @@ int _run_test(
     }
     initialize_testing(function_name);
     global_running_test = 1;
-    if (setjmp(global_run_test_env) == 0) {
+    case (setjmp(global_run_test_env)) {
+    case TEST_PASS:
         Function(state ? state : &current_state);
         fail_if_leftover_values(function_name);
 
@@ -1698,10 +1699,14 @@ int _run_test(
         if (function_type == UNIT_TEST_FUNCTION_TYPE_TEST) {
             print_message("[       OK ] %s\n", function_name);
         }
-        rc = 0;
-    } else {
+        test_result = TEST_PASS;
+    case TEST_FAIL:
         global_running_test = 0;
         print_message("[  FAILED  ] %s\n", function_name);
+        break;
+    default:
+        assert_null("BUG: shouldn't be here!");
+        break;
     }
     teardown_testing(function_name);
 
@@ -1719,7 +1724,7 @@ int _run_test(
 #endif /* !_WIN32 */
     }
 
-    return rc;
+    return test_result;
 }
 
 
@@ -1796,21 +1801,25 @@ int _run_tests(const UnitTest * const tests, const size_t number_of_tests) {
         }
 
         if (run_next_test) {
-            int failed = _run_test(test->name, test->function, current_state,
-                                   test->function_type, test_check_point);
-            if (failed) {
+            const TestResult test_result =
+                    _run_test(test->name, test->function, current_state,
+                              test->function_type, test_check_point);
+
+            if (test_result == TEST_FAIL) {
                 failed_names[total_failed] = test->name;
             }
 
             switch (test->function_type) {
             case UNIT_TEST_FUNCTION_TYPE_TEST:
-                previous_test_failed = failed;
-                total_failed += failed;
+                if (test_result == TEST_FAIL) {
+                    previous_test_failed = 1;
+                    total_failed ++;
+                }
                 tests_executed ++;
                 break;
 
             case UNIT_TEST_FUNCTION_TYPE_SETUP:
-                if (failed) {
+                if (test_result == TEST_FAIL) {
                     total_failed ++;
                     tests_executed ++;
                     /* Skip forward until the next test or setup function. */
@@ -1821,7 +1830,7 @@ int _run_tests(const UnitTest * const tests, const size_t number_of_tests) {
 
             case UNIT_TEST_FUNCTION_TYPE_TEARDOWN:
                 /* If this test failed. */
-                if (failed && !previous_test_failed) {
+                if (test_result == TEST_FAIL && !previous_test_failed) {
                     total_failed ++;
                 }
                 break;
