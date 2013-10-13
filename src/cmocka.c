@@ -124,6 +124,7 @@ typedef struct MallocBlockInfo {
 typedef enum TestResult {
     TEST_PASS,
     TEST_FAIL,
+    TEST_SKIP,
 } TestResult;
 
 /* State of each test. */
@@ -1704,6 +1705,10 @@ TestResult _run_test(
         global_running_test = 0;
         print_message("[  FAILED  ] %s\n", function_name);
         break;
+    case TEST_SKIP:
+        global_running_test = 0;
+        print_message("[  SKIPPED  ] %s\n", function_name);
+        break;
     default:
         assert_null("BUG: shouldn't be here!");
         break;
@@ -1731,8 +1736,8 @@ TestResult _run_test(
 int _run_tests(const UnitTest * const tests, const size_t number_of_tests) {
     /* Whether to execute the next test. */
     int run_next_test = 1;
-    /* Whether the previous test failed. */
-    int previous_test_failed = 0;
+    /* Whether the previous test failed or skipped. */
+    int previous_test_failed_or_skipped = 0;
     /* Check point of the heap state. */
     const ListNode * const check_point = check_point_allocated_blocks();
     /* Current test being executed. */
@@ -1741,6 +1746,8 @@ int _run_tests(const UnitTest * const tests, const size_t number_of_tests) {
     size_t tests_executed = 0;
     /* Number of failed tests. */
     size_t total_failed = 0;
+    /* Number of skipped tests. */
+    size_t total_skipped = 0;
     /* Number of setup functions. */
     size_t setups = 0;
     /* Number of teardown functions. */
@@ -1755,6 +1762,9 @@ int _run_tests(const UnitTest * const tests, const size_t number_of_tests) {
     /* Names of the tests that failed. */
     const char** failed_names = (const char**)malloc(number_of_tests *
                                        sizeof(*failed_names));
+    /* Names of the tests that skipped. */
+    const char** skipped_names = (const char**)malloc(number_of_tests *
+                                       sizeof(*skipped_names));
     void **current_state = NULL;
 
     print_message("[==========] Running %"PRIdS " test(s).\n", number_of_tests);
@@ -1807,31 +1817,44 @@ int _run_tests(const UnitTest * const tests, const size_t number_of_tests) {
 
             if (test_result == TEST_FAIL) {
                 failed_names[total_failed] = test->name;
+            } else if (test_result == TEST_SKIPPED) {
+                skipped_names[total_skipped] = test->name;
             }
 
             switch (test->function_type) {
             case UNIT_TEST_FUNCTION_TYPE_TEST:
                 if (test_result == TEST_FAIL) {
-                    previous_test_failed = 1;
+                    previous_test_failed_or_skipped = 1;
                     total_failed ++;
+                } else if (test_result == TEST_SKIPPED) {
+                    previous_test_failed_or_skipped = 1;
+                    total_skipped ++;
                 }
+
                 tests_executed ++;
                 break;
 
             case UNIT_TEST_FUNCTION_TYPE_SETUP:
                 if (test_result == TEST_FAIL) {
                     total_failed ++;
+                } else if (test_result == TEST_SKIP) {
+                    total_skipped ++;
+                }
+
+                if (test_result != TEST_PASS) {
                     tests_executed ++;
                     /* Skip forward until the next test or setup function. */
                     run_next_test = 0;
                 }
-                previous_test_failed = 0;
+
+                previous_test_failed_or_skipped = 0;
                 break;
 
             case UNIT_TEST_FUNCTION_TYPE_TEARDOWN:
-                /* If this test failed. */
-                if (test_result == TEST_FAIL && !previous_test_failed) {
+                if (test_result == TEST_FAIL && !previous_test_failed_or_skipped) {
                     total_failed ++;
+                } else if (test_result == TEST_SKIP && !previous_test_failed_or_skipped) {
+                    total_skipped ++;
                 }
                 break;
             default:
@@ -1842,7 +1865,8 @@ int _run_tests(const UnitTest * const tests, const size_t number_of_tests) {
     }
 
     print_message("[==========] %"PRIdS " test(s) run.\n", tests_executed);
-    print_error("[  PASSED  ] %"PRIdS " test(s).\n", tests_executed - total_failed);
+    print_error("[  PASSED  ] %"PRIdS " test(s).\n",
+                tests_executed - (total_failed + total_skipped));
 
     if (total_failed) {
         size_t i;
@@ -1854,6 +1878,16 @@ int _run_tests(const UnitTest * const tests, const size_t number_of_tests) {
         print_error("\n %"PRIdS " FAILED TEST(S)\n", total_failed);
     }
 
+    if (total_skippedd) {
+        size_t i;
+        print_error("[  SKIPPED  ] %"PRIdS " test(s), listed below:\n", total_skippedd);
+        for (i = 0; i < total_skippedd; i++) {
+            print_error("[  SKIPPED  ] %s\n", skippedd_names[i]);
+        }
+    } else {
+        print_error("\n %"PRIdS " SKIPPED TEST(S)\n", total_skippedd);
+    }
+
     if (number_of_test_states) {
         print_error("[  ERROR   ] Mismatched number of setup %"PRIdS " and "
                     "teardown %"PRIdS " functions\n", setups, teardowns);
@@ -1862,6 +1896,7 @@ int _run_tests(const UnitTest * const tests, const size_t number_of_tests) {
 
     free(test_states);
     free((void*)failed_names);
+    free((void*)skipped_names);
 
     fail_if_blocks_allocated(check_point, "run_tests");
 
