@@ -302,9 +302,9 @@ static const ExceptionCodeInfo exception_codes[] = {
 
 
 /* Exit the currently executing test. */
-static void exit_test(const int quit_application) {
+static void exit_test(TestResult test_result, const int quit_application) {
     if (global_running_test) {
-        longjmp(global_run_test_env, 1);
+        longjmp(global_run_test_env, test_result);
     } else if (quit_application) {
         exit(-1);
     }
@@ -363,7 +363,7 @@ static void fail_if_leftover_values(const char *test_name) {
         error_occurred = 1;
     }
     if (error_occurred) {
-        exit_test(1);
+        exit_test(TEST_FAIL, 1);
     }
 }
 
@@ -722,7 +722,7 @@ LargestIntegralType _mock(const char * const function, const char* const file,
             print_error("There were no previously returned mock values for "
                         "this test.\n");
         }
-        exit_test(1);
+        exit_test(TEST_FAIL, 1);
     }
     return 0;
 }
@@ -1273,7 +1273,7 @@ void _check_expected(
             print_error("There were no previously declared parameter values "
                         "for this test.\n");
         }
-        exit_test(1);
+        exit_test(TEST_FAIL, 1);
     }
 }
 
@@ -1550,14 +1550,14 @@ static void fail_if_blocks_allocated(const ListNode * const check_point,
         free_allocated_blocks(check_point);
         print_error("ERROR: %s leaked %d block(s)\n", test_name,
                     allocated_blocks);
-        exit_test(1);
+        exit_test(TEST_FAIL, 1);
     }
 }
 
 
 void _fail(const char * const file, const int line) {
   print_error(SOURCE_LOCATION_FORMAT ": error: Failure!\n", file, line);
-    exit_test(1);
+    exit_test(TEST_FAIL, 1);
 }
 
 
@@ -1568,7 +1568,7 @@ static void exception_handler(int sig) {
 #else
     print_error("%d\n", sig);
 #endif
-    exit_test(1);
+    exit_test(TEST_FAIL, 1);
 }
 
 #else /* _WIN32 */
@@ -1600,7 +1600,7 @@ static LONG WINAPI exception_filter(EXCEPTION_POINTERS *exception_pointers) {
                     "\n");
                 shown_debug_message = 1;
             }
-            exit_test(0);
+            exit_test(TEST_FAIL, 0);
             return EXCEPTION_EXECUTE_HANDLER;
         }
     }
@@ -1791,7 +1791,7 @@ int _run_tests(const UnitTest * const tests, const size_t number_of_tests) {
         default:
             print_error("Invalid unit test function type %d\n",
                         test->function_type);
-            exit_test(1);
+            exit_test(TEST_FAIL, 1);
             break;
         }
 
