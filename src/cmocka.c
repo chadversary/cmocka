@@ -1850,5 +1850,9 @@ int _run_tests(const UnitTest * const tests, const size_t number_of_tests) {
     free((void*)failed_names);
 
     fail_if_blocks_allocated(check_point, "run_tests");
-    return (int)total_failed;
+
+    if (total_failed == 0)
+        return 0;
+    else
+        return 1;
 }
